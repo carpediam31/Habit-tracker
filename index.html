@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Winter Arc — Habit Tracker (Reports)</title>
+  <style>
+    :root{
+      --bg:#071226;
+      --card:#0b1220;
+      --muted:#9aa4b2;
+      --accent:#7dd3fc;
+      --accent-2:#60a5fa;
+      --glass: rgba(255,255,255,0.03);
+      --success: #10b981;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial;color:#eaf6ff;background:linear-gradient(180deg,#071226 0%,#081226 60%);-webkit-font-smoothing:antialiased}
+    .app{max-width:980px;margin:18px auto;padding:14px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .title{display:flex;gap:12px;align-items:center}
+    .logo{width:46px;height:46px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:#052033;font-weight:700;font-size:18px;box-shadow:0 6px 18px rgba(12,34,56,0.6)}
+    h1{font-size:18px;margin:0}
+    p.sub{margin:0;color:var(--muted);font-size:13px}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{background:var(--glass);color:var(--accent);border:1px solid rgba(255,255,255,0.04);padding:8px 10px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer}
+    button.ghost{background:transparent;color:var(--muted);border:1px dashed rgba(255,255,255,0.03)}
+    button.small{padding:6px 8px;font-size:13px;border-radius:8px}
+    .tracker-card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:14px;padding:12px;box-shadow:0 6px 18px rgba(2,6,12,0.6);border:1px solid rgba(255,255,255,0.02)}
+    .grid{display:grid;grid-template-columns:1fr;gap:10px}
+    .habit-head{display:flex;gap:8px;overflow:auto;padding-bottom:6px;scrollbar-width:none}
+    .habit-chip{flex:0 0 auto;background:rgba(255,255,255,0.02);border-radius:999px;padding:8px 10px;font-size:13px;color:var(--muted);border:1px solid rgba(255,255,255,0.02)}
+    table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+    thead th{text-align:left;font-size:12px;color:var(--muted);padding:8px;position:sticky;top:0;backdrop-filter:blur(4px);background:linear-gradient(180deg,rgba(11,18,29,0.6),rgba(11,18,29,0.5));z-index:2}
+    tbody td{padding:8px;border-top:1px solid rgba(255,255,255,0.02);vertical-align:middle}
+    .habit-name{min-width:120px;font-weight:600;font-size:14px;color:#eaf6ff}
+    .day-cell{text-align:center;width:42px;height:42px}
+    .day-cell input[type="checkbox"]{width:26px;height:26px;transform:scale(1.05);accent-color:var(--success);cursor:pointer}
+    .progress{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+    .progress .bar{background:rgba(255,255,255,0.04);flex:1 1 200px;height:12px;border-radius:999px;overflow:hidden;position:relative}
+    .progress .bar>i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:999px;transition:width 300ms ease}
+    .progress .label{font-size:13px;color:var(--muted);min-width:110px;text-align:right}
+    .footer-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    .report-area{display:grid;gap:10px;margin-top:12px}
+    .report-card{background:linear-gradient(180deg,rgba(255,255,255,0.015),rgba(255,255,255,0.01));padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.02)}
+    canvas{max-width:100%;height:auto}
+    .muted{color:var(--muted);font-size:13px}
+    .row{display:flex;gap:8px;align-items:center}
+    .col{display:flex;flex-direction:column;gap:8px}
+    @media(max-width:420px){.title h1{font-size:16px}.logo{width:44px;height:44px;font-size:16px}.day-cell{width:38px;height:38px}.day-cell input[type="checkbox"]{width:22px;height:22px}}
+  </style>
+  <!-- Chart.js CDN for chart rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title">
+        <div class="logo">W</div>
+        <div>
+          <h1>Winter Arc — 11 Habit Tracker</h1>
+          <p class="sub">Tap to mark habits. Generate weekly reports and share images.</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="prevWeek" class="small ghost">◀ Prev</button>
+        <button id="nextWeek" class="small ghost">Next ▶</button>
+        <button id="resetWeek" class="small ghost">Reset</button>
+        <button id="generateReport" class="small">Generate Report</button>
+      </div>
+    </header>
+
+    <main class="tracker-card">
+      <div class="grid">
+        <div class="habit-head" id="habitHead"></div>
+
+        <table aria-label="Habit tracker">
+          <thead>
+            <tr>
+              <th>Habit</th>
+              <th class="center">Mon</th>
+              <th class="center">Tue</th>
+              <th class="center">Wed</th>
+              <th class="center">Thu</th>
+              <th class="center">Fri</th>
+              <th class="center">Sat</th>
+              <th class="center">Sun</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+
+        <div class="progress" aria-hidden="false">
+          <div class="label muted" id="weekLabel"></div>
+          <div class="bar"><i id="progressFill"></i></div>
+          <div class="label" id="progressPercent">0%</div>
+        </div>
+
+        <div class="footer-actions">
+          <button id="markAllToday">Mark All Today</button>
+          <button id="clearAll" class="ghost">Clear All</button>
+          <div style="flex:1"></div>
+          <div class="muted">Saved to your browser</div>
+        </div>
+
+        <!-- Report area -->
+        <div class="report-area" id="reportArea" aria-live="polite">
+          <div class="report-card" id="reportCard" style="display:none">
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <div class="col" style="flex:1">
+                <div class="muted" id="summaryHeadline">Weekly summary</div>
+                <div style="font-weight:700;font-size:16px" id="summaryText">—</div>
+                <div class="muted" id="summaryDetails" style="font-size:13px">—</div>
+              </div>
+              <div style="width:46%;max-width:360px">
+                <canvas id="weeklyChart" width="600" height="360"></canvas>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+              <button id="downloadWeeklyImage">Download Weekly JPG</button>
+              <button id="shareWeeklyImage">Share Weekly Image</button>
+              <div style="flex:1"></div>
+              <div class="muted" style="font-size:12px">Tip: On mobile use Share for direct WhatsApp/Telegram sharing.</div>
+            </div>
+          </div>
+
+          <div class="report-card" id="dayCards" style="display:none">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <div class="muted">Per-day images (download or share):</div>
+              <div style="flex:1"></div>
+            </div>
+            <div id="dayList" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <div style="height:28px"></div>
+  </div>
+
+<script>
+/* ---------------------------
+   Config: 11 winter habits
+   --------------------------- */
+const HABITS = [
+  "Wake up early (before sunrise)",
+  "Morning sunlight exposure",
+  "Cold water face wash",
+  "Daily stretching or yoga",
+  "Drink warm water regularly",
+  "No phone till 30 mins after waking",
+  "Journal or gratitude writing",
+  "Evening walk in cool air",
+  "Herbal tea instead of coffee",
+  "Read 10 pages before bed",
+  "Sleep by 10:30 PM"
+];
+const DAYS = ["mon","tue","wed","thu","fri","sat","sun"]; // fixed order
+
+/* ---------------------------
+   Week key helper (Monday-based)
+   --------------------------- */
+function weekKeyFromDate(date){
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = (d.getDay() + 6) % 7; // Monday=0
+  d.setDate(d.getDate() - day);
+  const iso = d.toISOString().slice(0,10);
+  return 'winter-habits::' + iso;
+}
+let currentAnchor = new Date();
+
+/* ---------------------------
+   DOM refs
+   --------------------------- */
+const tbody = document.getElementById('tbody');
+const habitHead = document.getElementById('habitHead');
+const weekLabel = document.getElementById('weekLabel');
+const progressFill = document.getElementById('progressFill');
+const progressPercent = document.getElementById('progressPercent');
+const reportCard = document.getElementById('reportCard');
+const reportArea = document.getElementById('reportArea');
+const weeklyChartEl = document.getElementById('weeklyChart');
+const summaryText = document.getElementById('summaryText');
+const summaryDetails = document.getElementById('summaryDetails');
+const summaryHeadline = document.getElementById('summaryHeadline');
+const dayCards = document.getElementById('dayCards');
+const dayList = document.getElementById('dayList');
+
+let weeklyChart = null;
+
+/* ---------------------------
+   Build UI
+   --------------------------- */
+function buildTable(){
+  tbody.innerHTML = '';
+  habitHead.innerHTML = '';
+
+  HABITS.forEach((h,i)=>{
+    const chip = document.createElement('div');
+    chip.className = 'habit-chip';
+    chip.textContent = (i+1) + '. ' + h;
+    habitHead.appendChild(chip);
+  });
+
+  HABITS.forEach((habit, hi) => {
+    const tr = document.createElement('tr');
+
+    const nameTd = document.createElement('td');
+    nameTd.className = 'habit-name';
+    nameTd.textContent = habit;
+    tr.appendChild(nameTd);
+
+    DAYS.forEach((d, di) => {
+      const td = document.createElement('td');
+      td.className = 'day-cell';
+
+      const cb = document.createElement('input');
+      cb.type='checkbox';
+      cb.dataset.habit = hi;
+      cb.dataset.day = di;
+      cb.addEventListener('change', onToggle);
+      td.appendChild(cb);
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+
+  renderWeekLabel();
+  loadState();
+  updateProgress();
+}
+
+/* ---------------------------
+   Week label helpers
+   --------------------------- */
+function renderWeekLabel(){
+  const anchorMonday = getWeekMonday(currentAnchor);
+  const mondayStr = anchorMonday.toLocaleDateString();
+  const sunday = new Date(anchorMonday);
+  sunday.setDate(sunday.getDate() + 6);
+  const sundayStr = sunday.toLocaleDateString();
+  weekLabel.textContent = `Week: ${mondayStr} — ${sundayStr}`;
+}
+function getWeekMonday(date){
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = (d.getDay() + 6) % 7; // Monday=0
+  d.setDate(d.getDate() - day);
+  return d;
+}
+
+/* ---------------------------
+   Persistence (localStorage per-week)
+   --------------------------- */
+function loadState(){
+  const key = weekKeyFromDate(getWeekMonday(currentAnchor));
+  const raw = localStorage.getItem(key);
+  const data = raw ? JSON.parse(raw) : {};
+  document.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    const hi = cb.dataset.habit;
+    const di = cb.dataset.day;
+    cb.checked = !!(data[hi] && data[hi][di]);
+  });
+}
+
+function saveState(){
+  const key = weekKeyFromDate(getWeekMonday(currentAnchor));
+  const out = {};
+  document.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    const hi = cb.dataset.habit;
+    const di = cb.dataset.day;
+    if(!out[hi]) out[hi] = Array(DAYS.length).fill(false);
+    out[hi][di] = !!cb.checked;
+  });
+  localStorage.setItem(key, JSON.stringify(out));
+  updateProgress();
+}
+
+/* ---------------------------
+   Events
+   --------------------------- */
+function onToggle(){ saveState(); }
+
+document.getElementById('prevWeek').addEventListener('click', ()=>{
+  currentAnchor.setDate(currentAnchor.getDate() - 7);
+  buildTable();
+  hideReport();
+});
+document.getElementById('nextWeek').addEventListener('click', ()=>{
+  currentAnchor.setDate(currentAnchor.getDate() + 7);
+  buildTable();
+  hideReport();
+});
+document.getElementById('resetWeek').addEventListener('click', ()=>{
+  if(!confirm('Reset all marks for this week?')) return;
+  const key = weekKeyFromDate(getWeekMonday(currentAnchor));
+  localStorage.removeItem(key);
+  loadState();
+  updateProgress();
+  hideReport();
+});
+document.getElementById('markAllToday').addEventListener('click', ()=>{
+  const today = new Date();
+  const monday = getWeekMonday(currentAnchor);
+  const dayIndex = Math.floor((today - monday) / (1000*60*60*24));
+  if(dayIndex < 0 || dayIndex > 6){
+    if(!confirm('Today is not in the displayed week. Do you want to mark the same weekday of this week?')) return;
+  }
+  const di = Math.max(0, Math.min(6, dayIndex));
+  document.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    if(Number(cb.dataset.day) === di) cb.checked = true;
+  });
+  saveState();
+  hideReport();
+});
+document.getElementById('clearAll').addEventListener('click', ()=>{
+  if(!confirm('Clear everything for this week?')) return;
+  document.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=false);
+  saveState();
+  hideReport();
+});
+
+/* ---------------------------
+   Progress UI
+   --------------------------- */
+function updateProgress(){
+  const boxes = Array.from(document.querySelectorAll('input[type=checkbox]'));
+  const total = boxes.length;
+  const done = boxes.filter(b=>b.checked).length;
+  const pct = total === 0 ? 0 : Math.round((done/total)*100);
+  progressFill.style.width = pct + '%';
+  progressPercent.textContent = pct + '%';
+}
+
+/* ---------------------------
+   Report generation
+   --------------------------- */
+document.getElementById('generateReport').addEventListener('click', generateReport);
+
+function generateReport(){
+  // build data
+  const key = weekKeyFromDate(getWeekMonday(currentAnchor));
+  const raw = localStorage.getItem(key) || '{}';
+  const data = JSON.parse(raw);
+
+  // compute per-day totals and per-habit totals
+  const perDay = Array(DAYS.length).fill(0); // number of checked habits each day
+  const perHabit = Array(HABITS.length).fill(0);
+  let totalChecked = 0;
+  for(let hi=0; hi<HABITS.length; hi++){
+    const row = data[hi] || Array(DAYS.length).fill(false);
+    for(let di=0; di<DAYS.length; di++){
+      if(row[di]){
+        perDay[di] += 1;
+        perHabit[hi] += 1;
+        totalChecked++;
+      }
+    }
+  }
+  const totalPossible = HABITS.length * DAYS.length;
+  const overallPct = totalPossible===0?0: Math.round((totalChecked/totalPossible)*100);
+
+  // average per day (habits done)
+  const avgPerDay = perDay.reduce((a,b)=>a+b,0)/DAYS.length;
+  const avgPerHabit = perHabit.reduce((a,b)=>a+b,0)/HABITS.length;
+
+  // performance message
+  let performance = 'Needs consistency — keep going!';
+  if(overallPct >= 80) performance = 'Excellent — you crushed this week!';
+  else if(overallPct >= 60) performance = 'Good progress — keep the momentum.';
+  else if(overallPct >= 40) performance = 'Fair — pick 1-2 habits to focus on.';
+  else performance = 'Needs consistency — keep going!';
+
+  // render summary
+  summaryText.textContent = `${overallPct}% completed (${totalChecked} of ${totalPossible})`;
+  summaryDetails.textContent = `Avg per day: ${avgPerDay.toFixed(1)} habits · Avg per habit: ${avgPerHabit.toFixed(1)} days/week`;
+  summaryHeadline.textContent = performance;
+
+  // show chart: perDay as bar chart (0..HABITS length)
+  const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const chartData = {
+    labels,
+    datasets: [{
+      label: 'Habits done (per day)',
+      data: perDay,
+      backgroundColor: labels.map((_,i)=>i%2? 'rgba(96,165,250,0.9)':'rgba(125,211,252,0.9)'),
+      borderRadius:6,
+      barThickness:28
+    }]
+  };
+  const config = {
+    type:'bar',
+    data:chartData,
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      scales:{
+        y:{
+          beginAtZero:true,
+          max: HABITS.length,
+          ticks:{stepSize:1}
+        }
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{mode:'index',intersect:false}
+      }
+    }
+  };
+
+  if(weeklyChart) weeklyChart.destroy();
+  weeklyChart = new Chart(weeklyChartEl, config);
+
+  // show report card area
+  reportCard.style.display = 'block';
+  dayCards.style.display = 'block';
+
+  // build per-day image buttons
+  buildDayCards(perDay, totalPossible);
+}
+
+/* ---------------------------
+   Build per-day cards (image + share)
+   --------------------------- */
+function buildDayCards(perDay, totalPossible){
+  dayList.innerHTML = '';
+  const monday = getWeekMonday(currentAnchor);
+
+  for(let di=0; di<7; di++){
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + di);
+    const dayLabel = date.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+
+    const card = document.createElement('div');
+    card.style.minWidth = '170px';
+    card.style.background = 'rgba(255,255,255,0.02)';
+    card.style.borderRadius = '10px';
+    card.style.padding = '8px';
+    card.style.display = 'flex';
+    card.style.flexDirection = 'column';
+    card.style.gap = '8px';
+    card.style.alignItems = 'stretch';
+
+    const title = document.createElement('div');
+    title.style.fontWeight = '700';
+    title.style.fontSize = '14px';
+    title.textContent = dayLabel;
+    card.appendChild(title);
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'muted';
+    subtitle.style.fontSize = '12px';
+    subtitle.textContent = `${perDay[di]} of ${HABITS.length} habits`;
+    card.appendChild(subtitle);
+
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '6px';
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.textContent = 'Download JPG';
+    downloadBtn.style.flex = '1';
+    downloadBtn.addEventListener('click', ()=> {
+      const imgBlobPromise = createDayImageBlob(di, perDay[di]);
+      imgBlobPromise.then(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `progress-${date.toISOString().slice(0,10)}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+    });
+
+    const shareBtn = document.createElement('button');
+    shareBtn.textContent = 'Share';
+    shareBtn.className = 'small';
+    shareBtn.style.flex = '0.8';
+    shareBtn.addEventListener('click', async ()=>{
+      const blob = await createDayImageBlob(di, perDay[di]);
+      await tryShareBlobWithFallback(blob, `My progress for ${dayLabel}: ${perDay[di]}/${HABITS.length} habits completed.`);
+    });
+
+    row.appendChild(downloadBtn);
+    row.appendChild(shareBtn);
+    card.appendChild(row);
+    dayList.appendChild(card);
+  }
+}
+
+/* ---------------------------
+   Create day image as blob (JPG)
+   We'll render on an offscreen canvas and export as blob
+   --------------------------- */
+function createDayImageBlob(dayIndex, doneCount){
+  return new Promise((resolve)=>{
+    const width = 800;
+    const height = 420;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    // background
+    const bg = ctx.createLinearGradient(0,0,0,height);
+    bg.addColorStop(0,'#071226');
+    bg.addColorStop(1,'#0b1220');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0,0,width,height);
+
+    // header text
+    ctx.fillStyle = '#eaf6ff';
+    ctx.font = '28px sans-serif';
+    const monday = getWeekMonday(currentAnchor);
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + dayIndex);
+    const dateLabel = date.toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
+    ctx.fillText('Winter Arc — Daily Progress', 28, 50);
+    ctx.font = '20px sans-serif';
+    ctx.fillStyle = '#cfeffc';
+    ctx.fillText(dateLabel, 28, 82);
+
+    // draw big progress circle
+    const cx = 160, cy = 240, radius = 120;
+    const pct = Math.round((doneCount / HABITS.length) * 100);
+
+    // background circle
+    ctx.beginPath();
+    ctx.arc(cx,cy,radius,0,Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fill();
+
+    // progress arc
+    const start = -Math.PI/2;
+    const end = start + (Math.PI*2) * (pct/100);
+    ctx.beginPath();
+    ctx.lineWidth = 24;
+    ctx.strokeStyle = '#7dd3fc';
+    ctx.lineCap = 'round';
+    ctx.arc(cx,cy,radius,start,end);
+    ctx.stroke();
+
+    // center text
+    ctx.fillStyle = '#eaf6ff';
+    ctx.font = '32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${pct}%`, cx, cy + 12);
+    ctx.font = '14px sans-serif';
+    ctx.fillText(`${doneCount} / ${HABITS.length}`, cx, cy + 40);
+
+    // right side: small list of habits (only show names and check marks)
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#cfeffc';
+    ctx.font = '16px sans-serif';
+    const listX = 320, listY = 150;
+    for(let i=0;i<HABITS.length;i++){
+      const y = listY + i*24;
+      // checkbox circle
+      ctx.beginPath();
+      ctx.arc(listX - 18, y+6, 8, 0, Math.PI*2);
+      // checkmark if done in saved data
+      const key = weekKeyFromDate(getWeekMonday(currentAnchor));
+      const raw = localStorage.getItem(key) || '{}';
+      const data = JSON.parse(raw);
+      const done = (data[i] && data[i][dayIndex]) ? true : false;
+      ctx.fillStyle = done ? '#10b981' : 'rgba(255,255,255,0.03)';
+      ctx.fill();
+      if(done){
+        ctx.fillStyle = '#052033';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('✓', listX - 22, y+10);
+      }
+      // habit text
+      ctx.fillStyle = '#eaf6ff';
+      ctx.font = '14px sans-serif';
+      const short = HABITS[i].length > 28 ? HABITS[i].slice(0,25) + '...' : HABITS[i];
+      ctx.fillText(short, listX - 2, y+10);
+    }
+
+    // footer note
+    ctx.fillStyle = '#9aa4b2';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Progress image generated from Winter Arc Habit Tracker', 28, height - 18);
+
+    canvas.toBlob((blob)=>{
+      resolve(blob);
+    }, 'image/jpeg', 0.92);
+  });
+}
+
+/* ---------------------------
+   Weekly image (chart + summary) -> create combined image blob
+   We'll render the chart canvas + summary into a single canvas
+   --------------------------- */
+async function createWeeklyImageBlob(){
+  // first ensure chart is rendered
+  if(!weeklyChart) {
+    alert('Please generate report first.');
+    throw new Error('No chart');
+  }
+
+  // get chart as data URL (Chart.js canvas)
+  const chartCanvas = weeklyChartEl;
+  // draw on a new canvas: summary text left, chart right
+  const width = 1200;
+  const height = 680;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+
+  // background
+  const bg = ctx.createLinearGradient(0,0,0,height);
+  bg.addColorStop(0,'#071226');
+  bg.addColorStop(1,'#0b1220');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,width,height);
+
+  // copy chart image
+  // create temporary image from chart canvas
+  const chartDataURL = chartCanvas.toDataURL('image/png');
+  const img = await new Promise((res,rej)=>{
+    const i = new Image();
+    i.onload = ()=>res(i);
+    i.onerror = rej;
+    i.src = chartDataURL;
+  });
+
+  // draw header text
+  ctx.fillStyle = '#eaf6ff';
+  ctx.font = '28px sans-serif';
+  ctx.fillText('Winter Arc — Weekly Report', 28, 48);
+
+  // performance summary (text)
+  ctx.font = '20px sans-serif';
+  ctx.fillStyle = '#cfeffc';
+  ctx.fillText(summaryHeadline.textContent, 28, 86);
+
+  ctx.font = '16px sans-serif';
+  ctx.fillStyle = '#dff7ff';
+  ctx.fillText(summaryText.textContent, 28, 116);
+
+  ctx.font = '14px sans-serif';
+  ctx.fillStyle = '#9aa4b2';
+  ctx.fillText(summaryDetails.textContent, 28, 146);
+
+  // draw the chart on the right side
+  const chartTargetW = 700;
+  const chartTargetH = 420;
+  ctx.drawImage(img, width - chartTargetW - 28, 200, chartTargetW, chartTargetH);
+
+  // small footer
+  ctx.fillStyle = '#9aa4b2';
+  ctx.font = '12px sans-serif';
+  const monday = getWeekMonday(currentAnchor);
+  const mondayStr = monday.toLocaleDateString();
+  const sunday = new Date(monday); sunday.setDate(sunday.getDate()+6);
+  const sundayStr = sunday.toLocaleDateString();
+  ctx.fillText(`Week: ${mondayStr} — ${sundayStr}`, 28, height - 18);
+
+  return new Promise((resolve)=> canvas.toBlob(resolve,'image/jpeg',0.92));
+}
+
+/* ---------------------------
+   Share helper: try navigator.share with files; fallback to WhatsApp text + download
+   --------------------------- */
+async function tryShareBlobWithFallback(blob, text){
+  const file = new File([blob], 'progress.jpg', {type: blob.type});
+  // try native share (mobile browsers typically)
+  if(navigator.canShare && navigator.canShare({ files: [file] })){
+    try{
+      await navigator.share({ files: [file], text });
+      return;
+    } catch(err){
+      // user cancelled or failed -> fallback
+      console.warn('Share failed', err);
+    }
+  }
+  // fallback: download and open WhatsApp web with text (user must attach image manually)
+  const url = URL.createObjectURL(blob);
+  // download automatically
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'progress.jpg';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // open whatsapp web with prefilled text
+  const waText = encodeURIComponent(text + '\n\n(Downloaded your image — attach it to the chat)');
+  const waUrl = `https://wa.me/?text=${waText}`;
+  window.open(waUrl, '_blank');
+}
+
+/* ---------------------------
+   Weekly image buttons behavior
+   --------------------------- */
+document.getElementById('downloadWeeklyImage').addEventListener('click', async ()=>{
+  try{
+    const blob = await createWeeklyImageBlob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `weekly-report-${weekKeyFromDate(getWeekMonday(currentAnchor)).slice(14)}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }catch(e){
+    console.error(e);
+  }
+});
+
+document.getElementById('shareWeeklyImage').addEventListener('click', async ()=>{
+  try{
+    const blob = await createWeeklyImageBlob();
+    await tryShareBlobWithFallback(blob, `My weekly progress: ${summaryText.textContent}`);
+  }catch(e){
+    console.error(e);
+  }
+});
+
+/* ---------------------------
+   Build initial table and autosave
+   --------------------------- */
+buildTable();
+setInterval(()=>{ saveState(); }, 5000);
+
+/* ---------------------------
+   Hide report helper
+   --------------------------- */
+function hideReport(){
+  reportCard.style.display = 'none';
+  dayCards.style.display = 'none';
+  if(weeklyChart){ weeklyChart.destroy(); weeklyChart = null; }
+  dayList.innerHTML = '';
+}
+
+/* ---------------------------
+   Accessibility: generate report on page load so users see quick summary of current data?
+   We won't auto-generate to avoid surprises; wait for user.
+   --------------------------- */
+</script>
+</body>
+</html>
